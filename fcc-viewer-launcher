@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+
+import sys
+import argparse
+import threading
+import http.server
+import socketserver
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Visualize a detector')
+    parser.add_argument('-c', '--compact', help='Compact file location',
+                        required=True, type=str)
+    parser.add_argument('-o', '--out', help='Converted file path',
+                        default='/tmp/fcc-detector.root', type=str)
+    parser.add_argument('--url', help='FCC-Viewer web address',
+                        default='http://localhost:8000', type=str)
+    args = vars(parser.parse_args())
+
+    convert(args['compact'], args['out'])
+
+    # Start web server
+    t = threading.Thread(name='web-server', target=run_server)
+    t.start()
+
+    open_browser(args['out'], args['url'])
+
+
+def convert(compact_path, out_path):
+    print('INFO: Converting following compact file:')
+    print('      ' + compact_path)
+
+    import ROOT
+
+    ROOT.gSystem.Load('libDDCore')
+    description = ROOT.dd4hep.Detector.getInstance()
+    description.fromXML(compact_path)
+    ROOT.gGeoManager.Export(out_path)
+
+
+def open_browser(out_path, url):
+    print('INFO: Opening browser window.')
+
+    import webbrowser
+
+    print(webbrowser.get())
+    webbrowser.open(url)
+
+
+class ReqHandler(http.server.SimpleHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        self.send_header('Access-Control-Allow-Headers',
+                         'Authorization,Content-Type')
+        self.end_headers()
+
+        self.wfile.write(bytes('', 'utf8'))
+
+        return
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        self.send_header('Access-Control-Allow-Headers',
+                         'Authorization,Content-Type')
+        self.end_headers()
+
+        self.wfile.write(bytes('', 'utf8'))
+
+        return
+
+    def do_GET(self):
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            self.end_headers()
+
+            html = '''<!doctype html>
+
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>FCC Viewer</title>
+    </head>
+
+    <body>
+        <div id="drawing" style="width:800px; height:600px"></div>
+        <script type='module'>
+            import { openFile, draw } from 'https://root.cern/js/latest/modules/main.mjs';
+            import { build } from 'https://root.cern/js/latest/modules/geom/TGeoPainter.mjs';
+
+            let file = await openFile("http://127.0.0.1:8000/fcc-detector.root");
+            let obj = await file.readObject("default");
+            console.log(obj);
+        </script>
+    </body>
+'''
+
+            self.wfile.write(bytes(html, 'utf8'))
+
+            return
+        elif '/fcc-detector.root' in self.path:
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/octet-stream')
+            self.send_header('Content-Disposition',
+                             'attachment; filename="fcc-detector.root"')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            self.end_headers()
+            with open('/tmp/fcc-detector.root', 'rb') as infile:
+                self.wfile.write(infile.read())
+
+
+def run_server():
+    req_handler = ReqHandler
+    server = socketserver.TCPServer(('', 8000), req_handler)
+    server.serve_forever()
+
+
+if __name__ == '__main__':
+    main()
