@@ -52,7 +52,8 @@ class ReqHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        self.send_header('Access-Control-Allow-Methods',
+                         'GET,POST,OPTIONS,HEAD')
         self.send_header('Access-Control-Allow-Headers',
                          'Authorization,Content-Type')
         self.end_headers()
@@ -65,7 +66,8 @@ class ReqHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        self.send_header('Access-Control-Allow-Methods',
+                         'GET,POST,OPTIONS,HEAD')
         self.send_header('Access-Control-Allow-Headers',
                          'Authorization,Content-Type')
         self.end_headers()
@@ -79,7 +81,8 @@ class ReqHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
             self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+            self.send_header('Access-Control-Allow-Methods',
+                             'GET,POST,OPTIONS,HEAD')
             self.send_header('Access-Control-Allow-Headers', 'Content-Type')
             self.end_headers()
 
@@ -90,6 +93,7 @@ class ReqHandler(http.server.SimpleHTTPRequestHandler):
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
+        <!-- <script src="GLTFExporter.js"></script> -->
         <title>FCC Viewer</title>
     </head>
 
@@ -98,10 +102,13 @@ class ReqHandler(http.server.SimpleHTTPRequestHandler):
         <script type='module'>
             import { openFile, draw } from 'https://root.cern/js/latest/modules/main.mjs';
             import { build } from 'https://root.cern/js/latest/modules/geom/TGeoPainter.mjs';
-
             let file = await openFile("http://127.0.0.1:8000/fcc-detector.root");
             let obj = await file.readObject("default");
+
+            let opt = { numfaces: 100000 };
             console.log(obj);
+            let obj3d = build(obj, opt);
+            console.log(obj3d);
         </script>
     </body>
 '''
@@ -109,6 +116,7 @@ class ReqHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(bytes(html, 'utf8'))
 
             return
+
         elif '/fcc-detector.root' in self.path:
             self.send_response(200)
             self.send_header('Content-Type', 'application/octet-stream')
@@ -121,6 +129,21 @@ class ReqHandler(http.server.SimpleHTTPRequestHandler):
             with open('/tmp/fcc-detector.root', 'rb') as infile:
                 self.wfile.write(infile.read())
 
+            return
+
+        elif '/GLTFExporter.js' in self.path:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/javascript')
+            self.send_header('Content-Disposition',
+                             'attachment; filename="GLTFExporter.js"')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            self.end_headers()
+            with open('GLTFExporter.js', 'rb') as infile:
+                self.wfile.write(infile.read())
+
+            return
 
 def run_server():
     req_handler = ReqHandler
